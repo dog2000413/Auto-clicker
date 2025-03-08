@@ -1,0 +1,8 @@
+hotkey=NONE
+feed=false
+afk=false
+circle=false
+spins=10
+drift=2
+min_delay=100
+max_delay=300
