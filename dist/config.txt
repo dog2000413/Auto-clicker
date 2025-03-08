@@ -1,8 +1,13 @@
-hotkey=NONE
+hotkey=`
 feed=false
 afk=false
 circle=false
+walk=false
 spins=10
 drift=2
+walk_min=3
+walk_max=10
+walk_duration_min=50
+walk_duration_max=150
 min_delay=100
 max_delay=300
