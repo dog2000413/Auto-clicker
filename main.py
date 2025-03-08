@@ -505,7 +505,7 @@ class AutoClicker(QMainWindow):
         self.save_config()
     
     def start_hotkey_listener(self):
-        # Stop existing listener if any
+        # Simple cleanup of old listener
         if hasattr(self, 'global_listener') and self.global_listener:
             self.global_listener.stop()
 
@@ -514,19 +514,14 @@ class AutoClicker(QMainWindow):
                 return True
             
             try:
-                # Add key to pressed keys if not already present
                 if key not in self.pressed_keys:
                     self.pressed_keys.append(key)
                 
-                # Check if hotkey combination is pressed
                 if len(self.pressed_keys) == len(self.hotkey_combination):
-                    matches = all(k in self.pressed_keys for k in self.hotkey_combination)
-                    if matches:
-                        # Use QTimer to handle toggle in main thread
+                    if all(k in self.pressed_keys for k in self.hotkey_combination):
                         QTimer.singleShot(0, self.toggle_clicking)
             except Exception as e:
                 print(f"Error in hotkey press: {e}")
-            
             return True
         
         def on_release(key):
@@ -537,11 +532,12 @@ class AutoClicker(QMainWindow):
                 print(f"Error in hotkey release: {e}")
             return True
         
-        # Create and start new listener
+        # Create new listener
+        self.pressed_keys = []
         self.global_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
-        self.global_listener.daemon = True  # Ensure thread doesn't block application exit
+        self.global_listener.daemon = True
         self.global_listener.start()
-    
+
     def toggle_clicking(self):
         if self.clicking:
             self.stop_clicking()
@@ -585,8 +581,9 @@ class AutoClicker(QMainWindow):
         self.delay_label.setText("Click Delay: 0.0 ms")
         self.feed_timer_label.setText("Next /feed in: --")
         
-        # Restart hotkey listener after stopping
-        QTimer.singleShot(100, self.start_hotkey_listener)  # Small delay before restarting
+        # Create a new listener instance when stopping
+        self.global_listener.stop()
+        self.start_hotkey_listener()
     
     def clicking_loop(self):
         if self.circle_checkbox.isChecked():
