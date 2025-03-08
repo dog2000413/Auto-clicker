@@ -5,7 +5,8 @@ import threading
 import math
 import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
-                            QHBoxLayout, QWidget, QLabel, QCheckBox, QLineEdit)
+                            QHBoxLayout, QWidget, QLabel, QCheckBox, QLineEdit,
+                            QTabWidget, QScrollArea, QSizePolicy)
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont, QIcon, QPixmap
 from pynput import mouse, keyboard
@@ -26,10 +27,26 @@ class AutoClicker(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Faction Minecraft Custom Auto Clicker")
-        self.setFixedSize(500, 550)
+        self.setMinimumSize(550, 800)  # Increased from 750 to 800
+        self.resize(500, 800)  # Increased initial size to match
+        
+        # Remove the setFixedSize line and add size policy for scaling
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         # Set window icon
         self.setWindowIcon(QIcon(resource_path('cute cat.jpg')))
+        
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+        
+        # Create main auto clicker tab
+        self.auto_clicker_tab = QWidget()
+        self.macro_tab = QWidget()
+        
+        # Add tabs
+        self.tab_widget.addTab(self.auto_clicker_tab, "Auto Clicker")
+        self.tab_widget.addTab(self.macro_tab, "Macros")
         
         # Initialize controllers
         self.mouse_controller = mouse.Controller()
@@ -44,6 +61,7 @@ class AutoClicker(QMainWindow):
         self.hotkey_combination = []
         self.max_hotkeys = 2
         self.current_delay = 0.0
+        self.pressed_keys = []
         
         # Create update timer for delay display
         self.update_timer = QTimer()
@@ -52,6 +70,7 @@ class AutoClicker(QMainWindow):
         
         # Setup UI
         self.setup_ui()
+        self.setup_macro_ui()
         
         # Load saved config
         self.load_config()
@@ -59,12 +78,32 @@ class AutoClicker(QMainWindow):
         # Start hotkey listener
         self.start_hotkey_listener()
     
+    def setup_macro_ui(self):
+        # Create layout for macro tab
+        macro_layout = QVBoxLayout()
+        self.macro_tab.setLayout(macro_layout)
+        
+        # Add "Coming Soon" label
+        coming_soon = QLabel("Macro Features Coming Soon!")
+        coming_soon.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        coming_soon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        macro_layout.addWidget(coming_soon)
+
     def setup_ui(self):
-        # Main layout
-        main_widget = QWidget()
+        # Main layout for auto clicker tab
         main_layout = QVBoxLayout()
-        main_widget.setLayout(main_layout)
-        self.setCentralWidget(main_widget)
+        main_layout.setSpacing(10)  # Add consistent spacing
+        self.auto_clicker_tab.setLayout(main_layout)
+        
+        # Create a scroll area to handle resizing
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        # Create container widget for scroll area
+        container = QWidget()
+        container_layout = QVBoxLayout()
+        container.setLayout(container_layout)
         
         # Cat image
         cat_label = QLabel()
@@ -76,21 +115,21 @@ class AutoClicker(QMainWindow):
             print(f"Error loading image: {e}")
         cat_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cat_label.setContentsMargins(0, 0, 0, 10)
-        main_layout.addWidget(cat_label)
+        container_layout.addWidget(cat_label)
         
         # Add spacing after the image
-        main_layout.addSpacing(10)
+        container_layout.addSpacing(10)
         
         # Title
         title_label = QLabel("Faction Minecraft Custom Auto Clicker")
         title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(title_label)
+        container_layout.addWidget(title_label)
         
         # Description
         desc_label = QLabel("Design and created by xSeorix")
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(desc_label)
+        container_layout.addWidget(desc_label)
         
         # Hotkey section
         hotkey_layout = QHBoxLayout()
@@ -102,43 +141,34 @@ class AutoClicker(QMainWindow):
         
         hotkey_layout.addWidget(hotkey_label)
         hotkey_layout.addWidget(self.hotkey_display)
-        main_layout.addLayout(hotkey_layout)
+        container_layout.addLayout(hotkey_layout)
         
         # Reduce spacing after hotkey section
-        main_layout.addSpacing(5)  # Reduced from 10
+        container_layout.addSpacing(5)  # Reduced from 10
         
         # Command checkboxes section
         checkbox_layout = QVBoxLayout()
-        checkbox_layout.setSpacing(2)  # Tighter spacing between checkbox items
+        checkbox_layout.setSpacing(2)
         
+        # Feed section
         self.feed_checkbox = QCheckBox("Toggle /feed")
         self.feed_timer_label = QLabel("Next /feed in: --")
         self.feed_timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # AFK section
         self.afk_checkbox = QCheckBox("Toggle /afk (after 5 seconds)")
+        
+        # Circle movement section
         self.circle_checkbox = QCheckBox("Circular Mouse Movement")
-        
-        checkbox_layout.addWidget(self.feed_checkbox)
-        checkbox_layout.addWidget(self.feed_timer_label)
-        checkbox_layout.addWidget(self.afk_checkbox)
-        checkbox_layout.addWidget(self.circle_checkbox)
-        
-        main_layout.addLayout(checkbox_layout)
-        
-        # Add spacing after circle checkbox
-        main_layout.addSpacing(8)  # Added spacing here
-        
-        # Circle movement settings
         circle_settings_layout = QHBoxLayout()
-        circle_settings_layout.setContentsMargins(20, 0, 20, 0)  # Add some left/right margin
+        circle_settings_layout.setContentsMargins(20, 0, 20, 0)
         
-        # Spins before drift compensation
         spins_label = QLabel("Spins before drift:")
-        self.spins_input = QLineEdit("10")  # Default 10 spins
+        self.spins_input = QLineEdit("10")
         self.spins_input.setMaximumWidth(70)
         
-        # Drift compensation amount
         drift_label = QLabel("Drift pixels:")
-        self.drift_input = QLineEdit("2")  # Default 2 pixels
+        self.drift_input = QLineEdit("2")
         self.drift_input.setMaximumWidth(70)
         
         circle_settings_layout.addWidget(spins_label)
@@ -146,22 +176,70 @@ class AutoClicker(QMainWindow):
         circle_settings_layout.addWidget(drift_label)
         circle_settings_layout.addWidget(self.drift_input)
         
-        main_layout.addLayout(circle_settings_layout)
+        # Auto walk section
+        self.walk_checkbox = QCheckBox("Auto Walk")
+        walk_settings_layout = QVBoxLayout()
+        walk_settings_layout.setContentsMargins(20, 0, 20, 0)
+        walk_settings_layout.setSpacing(5)  # Add spacing between the two rows
         
-        # Add spacing between sections
-        main_layout.addSpacing(5)  # Before delay settings
+        # Walk interval settings
+        interval_layout = QHBoxLayout()
+        walk_interval_label = QLabel("Walk Interval (s):")
+        self.walk_min_input = QLineEdit("3")
+        self.walk_min_input.setMaximumWidth(70)
+        walk_to_label = QLabel("to")
+        self.walk_max_input = QLineEdit("10")
+        self.walk_max_input.setMaximumWidth(70)
+        
+        interval_layout.addWidget(walk_interval_label)
+        interval_layout.addWidget(self.walk_min_input)
+        interval_layout.addWidget(walk_to_label)
+        interval_layout.addWidget(self.walk_max_input)
+        interval_layout.addStretch()  # Add stretch to keep elements left-aligned
+        walk_settings_layout.addLayout(interval_layout)
+        
+        # Walk duration settings (on new line)
+        duration_layout = QHBoxLayout()
+        walk_duration_label = QLabel("Press Duration (ms):")
+        walk_duration_label.setMinimumWidth(120)  # Ensure label doesn't get cut off
+        self.walk_duration_min_input = QLineEdit("50")
+        self.walk_duration_min_input.setMaximumWidth(70)
+        duration_to_label = QLabel("to")
+        self.walk_duration_max_input = QLineEdit("150")
+        self.walk_duration_max_input.setMaximumWidth(70)
+        
+        duration_layout.addWidget(walk_duration_label)
+        duration_layout.addWidget(self.walk_duration_min_input)
+        duration_layout.addWidget(duration_to_label)
+        duration_layout.addWidget(self.walk_duration_max_input)
+        duration_layout.addStretch()  # Add stretch to keep elements left-aligned
+        walk_settings_layout.addLayout(duration_layout)
+        
+        # Add everything to checkbox layout in order
+        checkbox_layout.addWidget(self.feed_checkbox)
+        checkbox_layout.addWidget(self.feed_timer_label)
+        checkbox_layout.addWidget(self.afk_checkbox)
+        checkbox_layout.addWidget(self.circle_checkbox)
+        checkbox_layout.addLayout(circle_settings_layout)
+        checkbox_layout.addWidget(self.walk_checkbox)
+        checkbox_layout.addLayout(walk_settings_layout)
+        
+        container_layout.addLayout(checkbox_layout)
+        
+        # Add spacing before delay settings
+        container_layout.addSpacing(5)
         
         # Add delay range settings
         delay_range_layout = QHBoxLayout()
         
         # Min delay
         min_delay_label = QLabel("Min Delay (ms):")
-        self.min_delay_input = QLineEdit("100")  # Default 100ms
+        self.min_delay_input = QLineEdit("100")
         self.min_delay_input.setMaximumWidth(70)
         
         # Max delay
         max_delay_label = QLabel("Max Delay (ms):")
-        self.max_delay_input = QLineEdit("300")  # Default 300ms
+        self.max_delay_input = QLineEdit("300")
         self.max_delay_input.setMaximumWidth(70)
         
         delay_range_layout.addWidget(min_delay_label)
@@ -169,10 +247,10 @@ class AutoClicker(QMainWindow):
         delay_range_layout.addWidget(max_delay_label)
         delay_range_layout.addWidget(self.max_delay_input)
         
-        main_layout.addLayout(delay_range_layout)
+        container_layout.addLayout(delay_range_layout)
         
         # Add spacing between sections
-        main_layout.addSpacing(5)  # Before delay settings
+        container_layout.addSpacing(5)  # Before toggle button
         
         # Start/Stop button
         self.toggle_button = QPushButton("Start Auto Clicking")
@@ -180,20 +258,20 @@ class AutoClicker(QMainWindow):
         self.toggle_button.setMinimumHeight(50)
         self.toggle_button.clicked.connect(self.toggle_clicking)
         
-        main_layout.addWidget(self.toggle_button)
+        container_layout.addWidget(self.toggle_button)
         
         # Status label
         self.status_label = QLabel("Status: Idle")
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.status_label)
+        container_layout.addWidget(self.status_label)
         
         # Delay label
         self.delay_label = QLabel("Click Delay: 0.0 ms")
         self.delay_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.delay_label)
+        container_layout.addWidget(self.delay_label)
         
         # Add spacing between sections
-        main_layout.addSpacing(10)  # Before toggle button
+        container_layout.addSpacing(10)  # Before toggle button
         
         # Update styling to include spacing for layouts
         self.setStyleSheet("""
@@ -229,12 +307,21 @@ class AutoClicker(QMainWindow):
         self.feed_checkbox.stateChanged.connect(self.save_config)
         self.afk_checkbox.stateChanged.connect(self.save_config)
         self.circle_checkbox.stateChanged.connect(self.save_config)
+        self.walk_checkbox.stateChanged.connect(self.save_config)
         
         # Connect input changes to save config
         self.spins_input.textChanged.connect(self.save_config)
         self.drift_input.textChanged.connect(self.save_config)
         self.min_delay_input.textChanged.connect(self.save_config)
         self.max_delay_input.textChanged.connect(self.save_config)
+        self.walk_min_input.textChanged.connect(self.save_config)
+        self.walk_max_input.textChanged.connect(self.save_config)
+        self.walk_duration_min_input.textChanged.connect(self.save_config)
+        self.walk_duration_max_input.textChanged.connect(self.save_config)
+        
+        # Add scroll area to main layout
+        scroll_area.setWidget(container)
+        main_layout.addWidget(scroll_area)
     
     def load_config(self):
         try:
@@ -276,10 +363,17 @@ class AutoClicker(QMainWindow):
                 self.feed_checkbox.setChecked(config.get('feed', 'false') == 'true')
                 self.afk_checkbox.setChecked(config.get('afk', 'false') == 'true')
                 self.circle_checkbox.setChecked(config.get('circle', 'false') == 'true')
+                self.walk_checkbox.setChecked(config.get('walk', 'false') == 'true')
                 
                 # Load circle settings
                 self.spins_input.setText(config.get('spins', '10'))
                 self.drift_input.setText(config.get('drift', '2'))
+                
+                # Load walk settings
+                self.walk_min_input.setText(config.get('walk_min', '3'))
+                self.walk_max_input.setText(config.get('walk_max', '10'))
+                self.walk_duration_min_input.setText(config.get('walk_duration_min', '50'))
+                self.walk_duration_max_input.setText(config.get('walk_duration_max', '150'))
                 
                 # Load delay range settings
                 self.min_delay_input.setText(config.get('min_delay', '100'))
@@ -305,10 +399,17 @@ class AutoClicker(QMainWindow):
             f.write(f'feed={str(self.feed_checkbox.isChecked()).lower()}\n')
             f.write(f'afk={str(self.afk_checkbox.isChecked()).lower()}\n')
             f.write(f'circle={str(self.circle_checkbox.isChecked()).lower()}\n')
+            f.write(f'walk={str(self.walk_checkbox.isChecked()).lower()}\n')
             
             # Save circle settings
             f.write(f'spins={self.spins_input.text()}\n')
             f.write(f'drift={self.drift_input.text()}\n')
+            
+            # Save walk settings
+            f.write(f'walk_min={self.walk_min_input.text()}\n')
+            f.write(f'walk_max={self.walk_max_input.text()}\n')
+            f.write(f'walk_duration_min={self.walk_duration_min_input.text()}\n')
+            f.write(f'walk_duration_max={self.walk_duration_max_input.text()}\n')
             
             # Save delay range settings
             f.write(f'min_delay={self.min_delay_input.text()}\n')
@@ -404,31 +505,41 @@ class AutoClicker(QMainWindow):
         self.save_config()
     
     def start_hotkey_listener(self):
+        # Stop existing listener if any
+        if hasattr(self, 'global_listener') and self.global_listener:
+            self.global_listener.stop()
+
         def on_press(key):
             if not self.hotkey_combination:
                 return True
             
             try:
-                # Add key to pressed keys
+                # Add key to pressed keys if not already present
                 if key not in self.pressed_keys:
                     self.pressed_keys.append(key)
                 
-                # Check if exactly the hotkey combination is pressed
+                # Check if hotkey combination is pressed
                 if len(self.pressed_keys) == len(self.hotkey_combination):
-                    if all(k in self.pressed_keys for k in self.hotkey_combination):
-                        self.toggle_clicking()
+                    matches = all(k in self.pressed_keys for k in self.hotkey_combination)
+                    if matches:
+                        # Use QTimer to handle toggle in main thread
+                        QTimer.singleShot(0, self.toggle_clicking)
             except Exception as e:
                 print(f"Error in hotkey press: {e}")
             
             return True
         
         def on_release(key):
-            if key in self.pressed_keys:
-                self.pressed_keys.remove(key)
+            try:
+                if key in self.pressed_keys:
+                    self.pressed_keys.remove(key)
+            except Exception as e:
+                print(f"Error in hotkey release: {e}")
             return True
         
-        self.pressed_keys = []
+        # Create and start new listener
         self.global_listener = keyboard.Listener(on_press=on_press, on_release=on_release)
+        self.global_listener.daemon = True  # Ensure thread doesn't block application exit
         self.global_listener.start()
     
     def toggle_clicking(self):
@@ -459,6 +570,12 @@ class AutoClicker(QMainWindow):
             self.afk_thread = threading.Thread(target=self.afk_command)
             self.afk_thread.daemon = True
             self.afk_thread.start()
+        
+        # Start walk thread if enabled
+        if self.walk_checkbox.isChecked():
+            self.walk_thread = threading.Thread(target=self.walk_loop)
+            self.walk_thread.daemon = True
+            self.walk_thread.start()
     
     def stop_clicking(self):
         self.clicking = False
@@ -466,7 +583,10 @@ class AutoClicker(QMainWindow):
         self.toggle_button.setStyleSheet("background-color: #4CAF50;")
         self.status_label.setText("Status: Stopped")
         self.delay_label.setText("Click Delay: 0.0 ms")
-        self.feed_timer_label.setText("Next /feed in: --")  # Reset feed timer display
+        self.feed_timer_label.setText("Next /feed in: --")
+        
+        # Restart hotkey listener after stopping
+        QTimer.singleShot(100, self.start_hotkey_listener)  # Small delay before restarting
     
     def clicking_loop(self):
         if self.circle_checkbox.isChecked():
@@ -584,6 +704,56 @@ class AutoClicker(QMainWindow):
             self.keyboard_controller.type("/afk")
             self.keyboard_controller.press(Key.enter)
             self.keyboard_controller.release(Key.enter)
+    
+    def walk_loop(self):
+        try:
+            while self.clicking:
+                # Get settings
+                min_interval = float(self.walk_min_input.text())
+                max_interval = float(self.walk_max_input.text())
+                min_duration = float(self.walk_duration_min_input.text()) / 1000
+                max_duration = float(self.walk_duration_max_input.text()) / 1000
+                
+                # Random wait between walks
+                time.sleep(random.uniform(min_interval, max_interval))
+                
+                if not self.clicking:  # Check if still running
+                    break
+                
+                # Randomly choose between W/S or A/D
+                if random.random() < 0.5:  # 50% chance for each pair
+                    # W/S movement
+                    keys = ['w', 's']
+                else:
+                    # A/D movement
+                    keys = ['a', 'd']
+                
+                # Randomize the order of the pair
+                if random.random() < 0.5:
+                    keys.reverse()
+                
+                # Press first key
+                duration = random.uniform(min_duration, max_duration)
+                self.keyboard_controller.press(keys[0])
+                time.sleep(duration)
+                self.keyboard_controller.release(keys[0])
+                
+                # Small pause between keys
+                time.sleep(0.1)
+                
+                # Press second key
+                duration = random.uniform(min_duration, max_duration)  # New random duration
+                self.keyboard_controller.press(keys[1])
+                time.sleep(duration)
+                self.keyboard_controller.release(keys[1])
+                
+        except ValueError:
+            print("Invalid walk settings, using defaults")
+            self.walk_min_input.setText("3")
+            self.walk_max_input.setText("10")
+            self.walk_duration_min_input.setText("50")
+            self.walk_duration_max_input.setText("150")
+            self.save_config()
     
     def closeEvent(self, event):
         # Clean up resources when closing the application
