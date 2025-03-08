@@ -3,6 +3,7 @@ import time
 import random
 import threading
 import math
+import os
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
                             QHBoxLayout, QWidget, QLabel, QCheckBox, QLineEdit)
 from PyQt6.QtCore import Qt, QTimer
@@ -11,6 +12,16 @@ from pynput import mouse, keyboard
 from pynput.mouse import Button
 from pynput.keyboard import Key, KeyCode
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 class AutoClicker(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -18,7 +29,7 @@ class AutoClicker(QMainWindow):
         self.setFixedSize(500, 550)
         
         # Set window icon
-        self.setWindowIcon(QIcon('cat.jpg'))
+        self.setWindowIcon(QIcon(resource_path('cute cat.jpg')))
         
         # Initialize controllers
         self.mouse_controller = mouse.Controller()
@@ -57,11 +68,14 @@ class AutoClicker(QMainWindow):
         
         # Cat image
         cat_label = QLabel()
-        pixmap = QPixmap('cute cat.jpg')
-        scaled_pixmap = pixmap.scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        cat_label.setPixmap(scaled_pixmap)
+        try:
+            pixmap = QPixmap(resource_path('cute cat.jpg'))
+            scaled_pixmap = pixmap.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            cat_label.setPixmap(scaled_pixmap)
+        except Exception as e:
+            print(f"Error loading image: {e}")
         cat_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cat_label.setContentsMargins(10, 10, 10, 10)
+        cat_label.setContentsMargins(0, 0, 0, 10)
         main_layout.addWidget(cat_label)
         
         # Add spacing after the image
