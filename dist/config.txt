@@ -1,7 +1,7 @@
 hotkey=`
 feed=false
 afk=false
-circle=false
+circle=true
 walk=false
 spins=10
 drift=2

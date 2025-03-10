@@ -168,11 +168,13 @@ class AutoClicker(QMainWindow):
         self.feed_checkbox = QCheckBox("Toggle /feed")
         self.feed_timer_label = QLabel("Next /feed in: --")
         self.feed_timer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.feed_checkbox.stateChanged.connect(lambda: self._on_checkbox_changed("feed"))
         checkbox_layout.addWidget(self.feed_checkbox)
         checkbox_layout.addWidget(self.feed_timer_label)
 
         # AFK feature
         self.afk_checkbox = QCheckBox("Toggle /afk (after 5 seconds)")
+        self.afk_checkbox.stateChanged.connect(lambda: self._on_checkbox_changed("afk"))
         checkbox_layout.addWidget(self.afk_checkbox)
 
         # Circle movement feature
@@ -190,6 +192,7 @@ class AutoClicker(QMainWindow):
     def _add_circle_movement_section(self, layout):
         """Add circular mouse movement settings"""
         self.circle_checkbox = QCheckBox("Circular Mouse Movement")
+        self.circle_checkbox.stateChanged.connect(lambda: self._on_checkbox_changed("circle"))
         layout.addWidget(self.circle_checkbox)
 
         circle_settings = QHBoxLayout()
@@ -214,6 +217,7 @@ class AutoClicker(QMainWindow):
     def _add_walk_section(self, layout):
         """Add auto walk settings"""
         self.walk_checkbox = QCheckBox("Auto Walk")
+        self.walk_checkbox.stateChanged.connect(lambda: self._on_checkbox_changed("walk"))
         layout.addWidget(self.walk_checkbox)
 
         walk_settings = QVBoxLayout()
@@ -329,19 +333,29 @@ class AutoClicker(QMainWindow):
     def _load_config(self):
         """Load configuration from file"""
         try:
-            with open('config.txt', 'r') as f:
-                config = dict(line.strip().split('=') for line in f if line.strip())
-                
+            # Try to read existing config
+            config = {}
+            if os.path.exists('config.txt'):
+                with open('config.txt', 'r') as f:
+                    for line in f:
+                        if '=' in line:
+                            key, value = line.strip().split('=', 1)
+                            config[key] = value.strip()  # Added strip() to remove whitespace
+            
             # Load hotkey
-            self._load_hotkey_config(config.get('hotkey', 'NONE'))
+            if 'hotkey' in config:
+                self.hotkey_display.setText(config['hotkey'])
+                # Convert the hotkey string back to key combination
+                if config['hotkey'] != 'NONE':
+                    self._convert_hotkey_string_to_combination(config['hotkey'])
             
             # Load checkboxes
-            self.feed_checkbox.setChecked(config.get('feed', 'false') == 'true')
-            self.afk_checkbox.setChecked(config.get('afk', 'false') == 'true')
-            self.circle_checkbox.setChecked(config.get('circle', 'false') == 'true')
-            self.walk_checkbox.setChecked(config.get('walk', 'false') == 'true')
+            self.feed_checkbox.setChecked(config.get('feed', 'false').lower() == 'true')
+            self.afk_checkbox.setChecked(config.get('afk', 'false').lower() == 'true')
+            self.circle_checkbox.setChecked(config.get('circle', 'false').lower() == 'true')
+            self.walk_checkbox.setChecked(config.get('walk', 'false').lower() == 'true')
             
-            # Load settings
+            # Load numeric settings
             self.spins_input.setText(config.get('spins', str(DEFAULT_CIRCLE_SPINS)))
             self.drift_input.setText(config.get('drift', str(DEFAULT_CIRCLE_DRIFT)))
             self.walk_min_input.setText(config.get('walk_min', str(DEFAULT_WALK_INTERVAL_MIN)))
@@ -351,19 +365,12 @@ class AutoClicker(QMainWindow):
             self.min_delay_input.setText(config.get('min_delay', str(DEFAULT_CLICK_DELAY_MIN)))
             self.max_delay_input.setText(config.get('max_delay', str(DEFAULT_CLICK_DELAY_MAX)))
             
-        except FileNotFoundError:
-            self._save_config()
         except Exception as e:
             print(f"Error loading config: {e}")
-            self._save_config()
+            self._create_default_config()
 
-    def _load_hotkey_config(self, hotkey_value):
-        """Load hotkey configuration"""
-        if hotkey_value == 'NONE':
-            self.hotkey_combination = []
-            self.hotkey_display.setText('NONE')
-            return
-
+    def _convert_hotkey_string_to_combination(self, hotkey_str):
+        """Convert saved hotkey string back to key combination"""
         self.hotkey_combination = []
         key_map = {
             'Space': Key.space,
@@ -372,39 +379,19 @@ class AutoClicker(QMainWindow):
             'Alt': Key.alt
         }
 
-        for name in hotkey_value.split(' + '):
-            if name in key_map:
-                self.hotkey_combination.append(key_map[name])
+        for key in hotkey_str.split(' + '):
+            if key in key_map:
+                self.hotkey_combination.append(key_map[key])
             else:
                 try:
-                    self.hotkey_combination.append(KeyCode.from_char(name.lower()))
+                    self.hotkey_combination.append(KeyCode.from_char(key.lower()))
                 except:
                     continue
 
-        if self.hotkey_combination:
-            self._update_hotkey_display()
-        else:
-            self.hotkey_display.setText('NONE')
-
-    def _save_config(self):
-        """Save configuration to file"""
-        with open('config.txt', 'w') as f:
-            f.write(f'hotkey={self.hotkey_display.text()}\n')
-            f.write(f'feed={str(self.feed_checkbox.isChecked()).lower()}\n')
-            f.write(f'afk={str(self.afk_checkbox.isChecked()).lower()}\n')
-            f.write(f'circle={str(self.circle_checkbox.isChecked()).lower()}\n')
-            f.write(f'walk={str(self.walk_checkbox.isChecked()).lower()}\n')
-            f.write(f'spins={self.spins_input.text()}\n')
-            f.write(f'drift={self.drift_input.text()}\n')
-            f.write(f'walk_min={self.walk_min_input.text()}\n')
-            f.write(f'walk_max={self.walk_max_input.text()}\n')
-            f.write(f'walk_duration_min={self.walk_duration_min_input.text()}\n')
-            f.write(f'walk_duration_max={self.walk_duration_max_input.text()}\n')
-            f.write(f'min_delay={self.min_delay_input.text()}\n')
-            f.write(f'max_delay={self.max_delay_input.text()}\n')
-
     def _start_hotkey_recording(self, event):
         """Start recording hotkey combination"""
+        # Set a flag to indicate we're recording
+        self.is_recording_hotkey = True
         self.hotkey_display.setText("Press keys together...")
         self.hotkey_combination = []
         self.recording_keys = set()
@@ -427,8 +414,10 @@ class AutoClicker(QMainWindow):
                 self.hotkey_combination = []
                 self.hotkey_display.setText('NONE')
                 self._save_config()
+                self.is_recording_hotkey = False
                 if self.hotkey_listener:
                     self.hotkey_listener.stop()
+                self._start_hotkey_listener()  # Restart main listener
                 return False
             
             if 1 <= len(self.recording_keys) <= 2:
@@ -437,8 +426,10 @@ class AutoClicker(QMainWindow):
                 
                 if len(self.recording_keys) == 2:
                     self._save_config()
+                    self.is_recording_hotkey = False
                     if self.hotkey_listener:
                         self.hotkey_listener.stop()
+                    self._start_hotkey_listener()  # Restart main listener
                     return False
         except Exception as e:
             print(f"Error in recording press: {e}")
@@ -453,8 +444,10 @@ class AutoClicker(QMainWindow):
             
             if len(self.recording_keys) == 0 and len(self.hotkey_combination) == 1:
                 self._save_config()
+                self.is_recording_hotkey = False
                 if self.hotkey_listener:
                     self.hotkey_listener.stop()
+                self._start_hotkey_listener()  # Restart main listener
                 return False
         except Exception as e:
             print(f"Error in recording release: {e}")
@@ -476,7 +469,7 @@ class AutoClicker(QMainWindow):
 
         for k in self.hotkey_combination:
             if hasattr(k, 'char'):
-                key_names.append(k.char)
+                key_names.append(k.char.upper())
             else:
                 key_names.append(key_map.get(k, str(k).replace("Key.", "")))
 
@@ -486,12 +479,15 @@ class AutoClicker(QMainWindow):
     def _start_hotkey_listener(self):
         """Start the global hotkey listener"""
         try:
+            # Stop existing listener if it exists
             if hasattr(self, 'global_listener'):
-                if self.global_listener.is_alive():
-                    self.global_listener.stop()
-                del self.global_listener
+                self.global_listener.stop()
 
             def on_press(key):
+                # Skip if we're recording a new hotkey
+                if hasattr(self, 'is_recording_hotkey') and self.is_recording_hotkey:
+                    return True
+                
                 if not self.hotkey_combination:
                     return True
                 try:
@@ -525,17 +521,22 @@ class AutoClicker(QMainWindow):
             self.global_listener.daemon = True
             self.global_listener.start()
 
-            # Wait for listener to start and update status
-            time.sleep(0.1)
-            if self.global_listener.is_alive():
-                self.thread_status.setText("Thread Status: Running")
-            else:
-                self.thread_status.setText("Thread Status: Failed to Start")
-                raise Exception("Failed to start hotkey listener")
+            # Update status after a short delay to ensure listener is running
+            QTimer.singleShot(200, self._update_listener_status)
             
         except Exception as e:
             print(f"Error starting hotkey listener: {e}")
             self.thread_status.setText(f"Thread Status: Error - {str(e)}")
+            # Try to restart after error
+            QTimer.singleShot(1000, self._start_hotkey_listener)
+
+    def _update_listener_status(self):
+        """Update the listener status display"""
+        if hasattr(self, 'global_listener') and self.global_listener.is_alive():
+            self.thread_status.setText("Thread Status: Running")
+        else:
+            self.thread_status.setText("Thread Status: Stopped")
+            # Try to restart if stopped
             QTimer.singleShot(1000, self._start_hotkey_listener)
 
     def _update_delay_display(self):
@@ -769,6 +770,33 @@ class AutoClicker(QMainWindow):
         if hasattr(self, 'hotkey_listener') and self.hotkey_listener:
             self.hotkey_listener.stop()
         event.accept()
+
+    def _on_checkbox_changed(self, checkbox_name):
+        """Handle checkbox state changes"""
+        print(f"{checkbox_name} checkbox changed to: {getattr(self, f'{checkbox_name}_checkbox').isChecked()}")
+        self._save_config()
+        print("Config saved successfully")  # Debug print
+
+    def _save_config(self):
+        """Save configuration to file"""
+        try:
+            with open('config.txt', 'w') as f:
+                f.write(f'hotkey={self.hotkey_display.text()}\n')
+                f.write(f'feed={str(self.feed_checkbox.isChecked()).lower()}\n')
+                f.write(f'afk={str(self.afk_checkbox.isChecked()).lower()}\n')
+                f.write(f'circle={str(self.circle_checkbox.isChecked()).lower()}\n')
+                f.write(f'walk={str(self.walk_checkbox.isChecked()).lower()}\n')
+                f.write(f'spins={self.spins_input.text()}\n')
+                f.write(f'drift={self.drift_input.text()}\n')
+                f.write(f'walk_min={self.walk_min_input.text()}\n')
+                f.write(f'walk_max={self.walk_max_input.text()}\n')
+                f.write(f'walk_duration_min={self.walk_duration_min_input.text()}\n')
+                f.write(f'walk_duration_max={self.walk_duration_max_input.text()}\n')
+                f.write(f'min_delay={self.min_delay_input.text()}\n')
+                f.write(f'max_delay={self.max_delay_input.text()}\n')
+            print("Config saved successfully")  # Debug print
+        except Exception as e:
+            print(f"Error saving config: {e}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
